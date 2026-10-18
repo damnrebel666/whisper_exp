@@ -75,10 +75,10 @@
     // For local tests, keep this false; results will download as a CSV at the end.
     // For real online data collection, create a DataPipe experiment, paste its ID below,
     // obtain approval for the data-storage arrangement, then set USE_DATAPIPE to true.
-    const USE_DATAPIPE = false;
+    const USE_DATAPIPE = true;
     // uploadtest=1 deliberately sends a clearly marked pilot session to DataPipe.
     const COLLECT_ONLINE = USE_DATAPIPE && (!IS_TEST_LINK || params.has('uploadtest'));
-    const DATAPIPE_EXPERIMENT_ID = 'REPLACE_WITH_YOUR_DATAPIPE_EXPERIMENT_ID';
+    const DATAPIPE_EXPERIMENT_ID = 'GqxD0TBhjjz1';
 
     function escapeHTML(s) {
       return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -195,7 +195,8 @@
         type: jsPsychExtensionPipe,
         params: {
           experiment_id: DATAPIPE_EXPERIMENT_ID,
-          filename: () => `whisper_list${LIST_ID}_${PARTICIPANT_ID}.csv`
+          filename: () => `whisper_list${LIST_ID}_${PARTICIPANT_ID}.csv`,
+          stream: false
         }
       }] : [];
 
