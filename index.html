@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Психолингвистический эксперимент</title>
+  <link href="https://unpkg.com/jspsych@8.3.0/css/jspsych.css" rel="stylesheet" type="text/css" />
+  <script src="https://unpkg.com/jspsych@8.3.0"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-html-button-response@2.1.0"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-audio-keyboard-response@2.2.0"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-preload@2.1.0"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-survey-html-form@2.1.0"></script>
+  <!-- Optional online data collection; leave disabled until DataPipe is configured. -->
+  <script src="https://unpkg.com/@jspsych/extension-pipe@0.2.0"></script>
+  <style>
+    :root { color-scheme: light; }
+    body { background: #f7f7f8; }
+    #jspsych-target { max-width: 980px; margin: 0 auto; }
+    .jspsych-display-element { font-family: Arial, Helvetica, sans-serif; color: #202124; }
+    .stimulus-card { max-width: 800px; margin: 24px auto; padding: 24px 22px; background: #fff; border: 1px solid #dedee2; border-radius: 12px; }
+    .context-line { font-size: clamp(22px, 3.2vw, 30px); line-height: 1.55; margin: 10px 0 24px; }
+    .question { font-size: 20px; margin: 24px 0 18px; }
+    .muted { color: #5f6368; font-size: 16px; }
+    .consent-box, .instructions-copy { max-width: 760px; margin: 30px auto; padding: 22px; text-align: left; font-size: 18px; line-height: 1.6; background: #fff; border: 1px solid #dedee2; border-radius: 12px; }
+    .consent-box h1, .instructions-copy h2 { text-align: center; }
+    .consent-actions { display: flex; justify-content: center; gap: 14px; flex-wrap: wrap; margin-top: 22px; }
+    .gate-button { min-height: 48px; padding: 12px 18px; font-size: 17px; border: 1px solid #777; border-radius: 8px; background: #fff; cursor: pointer; }
+    .gate-button.primary { background: #202124; border-color: #202124; color: #fff; }
+    .word-button { min-width: 150px; min-height: 64px; padding: 16px 24px !important; font-size: 26px !important; }
+    .status-note { max-width: 760px; margin: 16px auto 0; padding: 12px 16px; background: #fff4d5; border: 1px solid #e6c76b; border-radius: 8px; text-align: left; font-size: 15px; }
+    .error-note { margin: 24px; padding: 18px; background: #fff0f0; border: 1px solid #c44; border-radius: 8px; color: #5e1414; }
+    .participant-form { max-width: 760px; margin: 0 auto; text-align: left; }
+    .participant-form .q { margin: 18px 0; padding: 14px; background: #fff; border: 1px solid #dedee2; border-radius: 8px; }
+    .participant-form label { display: block; margin: 8px 0; }
+    .participant-form input[type="number"] { font-size: 18px; padding: 8px; max-width: 150px; }
+    .jspsych-btn { font-size: 18px; }
+    @media (max-width: 600px) {
+      .stimulus-card { margin: 12px; padding: 18px 14px; }
+      .word-button { min-width: 120px; font-size: 22px !important; }
+      .consent-box { margin: 12px; padding: 18px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="consent-gate">
+    <div class="consent-box">
+      <h1>Приветствую!</h1>
+      <p>Вам предстоит пройти психолингвистический эксперимент. Участие займёт около 5 минут.</p>
+      <p>Для участия Вам понадобятся наушники и тихое помещение. Перед началом убедитесь, что звук включён. В качестве ориентира установите громкость примерно на 60% шкалы устройства: запись должна быть отчётливо слышна, но не слишком громкой. Если необходимо, настройте громкость до комфортного уровня; по возможности не меняйте её во время задания.</p>
+      <p>Участие добровольное. Вы можете прекратить его в любой момент, закрыв страницу.</p>
+      <p>Ответы будут использоваться для академического исследования и анализироваться без указания имени.</p>
+      <p><strong>Нажимая «Согласен / согласна», Вы подтверждаете согласие на участие.</strong></p>
+      <div class="consent-actions">
+        <button id="decline-consent" class="gate-button">Не согласен / не согласна</button>
+        <button id="accept-consent" class="gate-button primary">Согласен / согласна</button>
+      </div>
+      <div id="test-note" class="status-note" hidden><strong>ТЕСТОВАЯ ССЫЛКА.</strong> Результаты этого запуска нужно считать проверочными, а не реальными данными.</div>
+    </div>
+  </div>
+  <div id="jspsych-target" hidden></div>
+  <noscript>Для выполнения эксперимента необходимо включить JavaScript в браузере.</noscript>
+  <script>
+  (function () {
+    const root = document.getElementById('jspsych-target');
+    const gate = document.getElementById('consent-gate');
+    const params = new URLSearchParams(window.location.search);
+    const rawList = Number.parseInt(params.get('list') || '1', 10);
+    const LIST_ID = Number.isInteger(rawList) && rawList >= 1 && rawList <= 6 ? rawList : 1;
+    const IS_TEST_LINK = params.has('test') || params.has('uploadtest');
+    const USE_TONE_FOR_TEST = params.get('test') === '1';
+    const generatedId = 'S' + Date.now().toString(36).slice(-5) + Math.random().toString(36).slice(2, 8).toUpperCase();
+    const PARTICIPANT_ID = (params.get('pid') || (IS_TEST_LINK ? 'PILOT_' + generatedId : generatedId)).trim().replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40);
+
+    // DATA COLLECTION SETTINGS:
+    // For local tests, keep this false; results will download as a CSV at the end.
+    // For real online data collection, create a DataPipe experiment, paste its ID below,
+    // obtain approval for the data-storage arrangement, then set USE_DATAPIPE to true.
+    const USE_DATAPIPE = false;
+    // uploadtest=1 deliberately sends a clearly marked pilot session to DataPipe.
+    const COLLECT_ONLINE = USE_DATAPIPE && (!IS_TEST_LINK || params.has('uploadtest'));
+    const DATAPIPE_EXPERIMENT_ID = 'REPLACE_WITH_YOUR_DATAPIPE_EXPERIMENT_ID';
+
+    function escapeHTML(s) {
+      return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+    function shuffle(array) {
+      const out = array.slice();
+      for (let i = out.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [out[i], out[j]] = [out[j], out[i]];
+      }
+      return out;
+    }
+    function makeDesign(data) {
+      const neutral = data.neutral_contexts;
+      const stateNames = [
+        { condition: 'congruent', target: 'A', context: 'A' },
+        { condition: 'congruent', target: 'B', context: 'B' },
+        { condition: 'conflict', target: 'A', context: 'B' },
+        { condition: 'conflict', target: 'B', context: 'A' },
+        { condition: 'neutral', target: 'A', context: 'N' },
+        { condition: 'neutral', target: 'B', context: 'N' }
+      ];
+      const listOffset = LIST_ID - 1;
+      const trials = data.pairs.map((pair, p) => {
+        const state = stateNames[(p + listOffset) % 6];
+        const targetWord = state.target === 'A' ? pair.a : pair.b;
+        let context;
+        let contextSide;
+        if (state.context === 'N') {
+          // This allocation makes all eight neutral context frames appear once per list.
+          const neutralIndex = (p % 2 === 0) ? Math.floor(p / 6) : 4 + Math.floor(p / 6);
+          context = neutral[neutralIndex];
+          contextSide = 'N';
+        } else {
+          contextSide = state.context;
+          context = state.context === 'A' ? pair.context_a : pair.context_b;
+        }
+        const otherWord = state.target === 'A' ? pair.b : pair.a;
+        return {
+          pair_id: pair.pair_id,
+          pair_index: p,
+          condition: state.condition,
+          target_side: state.target,
+          context_side: contextSide,
+          word_a: pair.a,
+          word_b: pair.b,
+          target_word: targetWord,
+          other_word: otherWord,
+          context,
+          audio: USE_TONE_FOR_TEST ? 'audio/test_tone.wav' : `audio/${pair.pair_id.toLowerCase()}_${state.target.toLowerCase()}.wav`
+        };
+      });
+
+      // In each condition, four trials have the correct answer on the left and four on the right.
+      for (const condition of ['congruent', 'conflict', 'neutral']) {
+        const subset = shuffle(trials.filter(t => t.condition === condition));
+        subset.forEach((t, i) => {
+          t.left_word = i < 4 ? t.target_word : t.other_word;
+          t.right_word = i < 4 ? t.other_word : t.target_word;
+          t.correct_side = i < 4 ? 'left' : 'right';
+        });
+      }
+      return shuffle(trials);
+    }
+
+    document.getElementById('test-note').hidden = !IS_TEST_LINK;
+    document.getElementById('decline-consent').addEventListener('click', function () {
+      gate.innerHTML = '<div class="consent-box"><h1>Участие не начато</h1><p>Вы не дали согласие, поэтому эксперимент не будет запущен и ответы не записываются.</p></div>';
+    });
+    document.getElementById('accept-consent').addEventListener('click', startExperiment);
+
+    async function startExperiment() {
+      document.getElementById('accept-consent').disabled = true;
+      document.getElementById('decline-consent').disabled = true;
+      gate.hidden = true;
+      root.hidden = false;
+      root.innerHTML = '<div style="padding:24px">Подготавливаем эксперимент…</div>';
+
+      // Friendly diagnostics: if a CDN-hosted jsPsych script did not load,
+      // the original version could remain on the preparation screen.
+      const missingLibraries = [];
+      if (typeof initJsPsych !== 'function') missingLibraries.push('jsPsych core (initJsPsych)');
+      if (typeof jsPsychHtmlButtonResponse !== 'function') missingLibraries.push('plugin-html-button-response');
+      if (typeof jsPsychAudioKeyboardResponse !== 'function') missingLibraries.push('plugin-audio-keyboard-response');
+      if (typeof jsPsychPreload !== 'function') missingLibraries.push('plugin-preload');
+      if (typeof jsPsychSurveyHtmlForm !== 'function') missingLibraries.push('plugin-survey-html-form');
+      if (missingLibraries.length) {
+        console.error('Missing jsPsych libraries:', missingLibraries);
+        root.innerHTML = `<div class="error-note"><h2>Не загрузились компоненты jsPsych</h2><p>Браузер не загрузил следующие компоненты: <strong>${escapeHTML(missingLibraries.join(', '))}</strong>.</p><p>Сам эксперимент не сломан. Чаще всего это означает, что CDN unpkg.com недоступен из этой сети, загрузку блокирует расширение браузера или интернет-соединение прервалось.</p><p>Проверь интернет, временно отключи блокировщик для этой страницы и обнови её. Если сообщение повторяется, пришли мне скриншот этого экрана — по названиям компонентов будет понятно, что именно не загрузилось.</p><p><a href="https://www.jspsych.org/v8/overview/plugins/" target="_blank" rel="noopener">Официальная документация jsPsych</a></p></div>`;
+        return;
+      }
+
+      if (COLLECT_ONLINE && DATAPIPE_EXPERIMENT_ID.startsWith('REPLACE_')) {
+        root.innerHTML = '<div class="error-note"><h2>Не настроен сбор данных</h2><p>В коде включён DataPipe, но не указан ID эксперимента. Внесите ID из панели DataPipe или отключите режим автоматического сбора.</p></div>';
+        return;
+      }
+
+      let stimulusData;
+      try {
+        const response = await fetch('data/stimuli_master.json', { cache: 'no-store' });
+        if (!response.ok) throw new Error(`Не удалось загрузить data/stimuli_master.json (HTTP ${response.status}).`);
+        stimulusData = await response.json();
+        if (!stimulusData.pairs || stimulusData.pairs.length !== 24 || !stimulusData.neutral_contexts || stimulusData.neutral_contexts.length !== 8) {
+          throw new Error('Проверка материалов не пройдена: ожидаются 24 пары и 8 нейтральных контекстов.');
+        }
+      } catch (error) {
+        root.innerHTML = `<div class="error-note"><h2>Не удалось запустить эксперимент</h2><p>${escapeHTML(error.message || String(error))}</p><p>Откройте проект через веб-сервер или опубликованную ссылку, а не двойным щелчком по index.html.</p></div>`;
+        return;
+      }
+
+      try {
+      const designTrials = makeDesign(stimulusData);
+      const extensionConfig = COLLECT_ONLINE ? [{
+        type: jsPsychExtensionPipe,
+        params: {
+          experiment_id: DATAPIPE_EXPERIMENT_ID,
+          filename: () => `whisper_list${LIST_ID}_${PARTICIPANT_ID}.csv`
+        }
+      }] : [];
+
+      const jsPsych = initJsPsych({
+        display_element: 'jspsych-target',
+        show_progress_bar: true,
+        auto_update_progress_bar: false,
+        extensions: extensionConfig,
+        on_trial_start: function () {
+          const completed = jsPsych.data.get().filter({ phase: 'choice' }).count();
+          jsPsych.progressBar.progress = Math.min(completed / 24, 1);
+        }
+      });
+      jsPsych.data.addProperties({
+        participant_id: PARTICIPANT_ID,
+        list_id: LIST_ID,
+        test_run: IS_TEST_LINK,
+        experiment_version: 'starter_1.1' 
+      });
+
+      const mainTimeline = [];
+      mainTimeline.push({
+        type: jsPsychHtmlButtonResponse,
+        stimulus: `<div class="instructions-copy"><h2>Инструкция</h2>
+          <p>В каждом испытании Вам будет представлено предложение с пропуском. Прочитайте его и нажмите «Я готов(а) слушать».</p>
+          <p>Затем прозвучит запись одного слова. После записи выберите из двух вариантов то слово, которое Вы услышали.</p>
+          <p>Запись прозвучит один раз; повторного прослушивания не будет. В задании 24 испытания.</p>
+          <p>Пожалуйста, не обновляйте страницу и не закрывайте вкладку до завершения.</p></div>`,
+        choices: ['Начать'],
+        data: { phase: 'instructions' }
+      });
+
+      mainTimeline.push({
+        type: jsPsychPreload,
+        audio: [...new Set(designTrials.map(t => t.audio))],
+        message: '<p>Подготовка аудиозаписей. Пожалуйста, подождите…</p>',
+        show_detailed_errors: true,
+        continue_after_error: false,
+        data: { phase: 'preload' }
+      });
+
+      designTrials.forEach((t, idx) => {
+        const meta = {
+          pair_id: t.pair_id,
+          planned_item_index: t.pair_index + 1,
+          condition: t.condition,
+          target_side: t.target_side,
+          context_side: t.context_side,
+          target_word: t.target_word,
+          word_a: t.word_a,
+          word_b: t.word_b,
+          context: t.context,
+          audio_file: t.audio,
+          left_option: t.left_word,
+          right_option: t.right_word,
+          correct_side: t.correct_side,
+          trial_order_actual: idx + 1
+        };
+        const sentenceHTML = `<div class="stimulus-card"><div class="context-line">${escapeHTML(t.context)}</div>`;
+        mainTimeline.push({
+          type: jsPsychHtmlButtonResponse,
+          stimulus: `${sentenceHTML}<p class="muted">Прочитайте предложение. Когда будете готовы, нажмите кнопку.</p></div>`,
+          choices: ['Я готов(а) слушать'],
+          data: { ...meta, phase: 'context' }
+        });
+        mainTimeline.push({
+          type: jsPsychAudioKeyboardResponse,
+          stimulus: t.audio,
+          choices: 'NO_KEYS',
+          trial_ends_after_audio: true,
+          response_allowed_while_playing: false,
+          prompt: `${sentenceHTML}<p class="muted">Слушайте слово. После записи появятся варианты ответа.</p></div>`,
+          data: { ...meta, phase: 'audio' }
+        });
+        mainTimeline.push({
+          type: jsPsychHtmlButtonResponse,
+          stimulus: `${sentenceHTML}<p class="question">Какое слово вы услышали?</p></div>`,
+          choices: [t.left_word, t.right_word],
+          button_layout: 'flex',
+          button_html: (choice) => `<button class="jspsych-btn word-button">${escapeHTML(choice)}</button>`,
+          data: { ...meta, phase: 'choice' },
+          on_finish: function (d) {
+            d.selected_word = d.response === 0 ? t.left_word : t.right_word;
+            d.response_side = d.response === 0 ? 'left' : 'right';
+            d.accuracy = d.selected_word === t.target_word ? 1 : 0;
+            jsPsych.progressBar.progress = Math.min(d.trial_order_actual / 24, 1);
+          }
+        });
+      });
+
+      mainTimeline.push({
+        type: jsPsychSurveyHtmlForm,
+        preamble: `<div class="instructions-copy"><h2>Несколько вопросов</h2><p>Перед завершением ответьте, пожалуйста, на несколько коротких вопросов.</p></div>`,
+        html: `<div class="participant-form">
+          <div class="q"><strong>1. Сколько Вам полных лет?</strong><p class="muted">Для участия нужно быть не младше 18 лет.</p><label>Возраст: <input type="number" name="age_years" min="18" max="99" step="1" required></label></div>
+          <div class="q"><strong>2. Ваш пол</strong>
+            <label><input type="radio" name="sex" value="female"> Женский</label>
+            <label><input type="radio" name="sex" value="male"> Мужской</label>
+            <label><input type="radio" name="sex" value="prefer_not_to_answer"> Предпочитаю не отвечать</label>
+          </div>
+          <div class="q"><strong>3. Как русский язык соотносится с Вашим родным языком?</strong>
+            <label><input type="radio" name="native_russian" value="russian_native" required> Русский — мой родной язык</label>
+            <label><input type="radio" name="native_russian" value="russian_and_other_native"> Русский и другой язык — мои родные языки</label>
+            <label><input type="radio" name="native_russian" value="not_russian_native"> Русский не является моим родным языком</label>
+          </div>
+          <div class="q"><strong>4. Есть ли у Вас трудности со слухом, которые могут влиять на восприятие речи?</strong>
+            <label><input type="radio" name="hearing_difficulty" value="no" required> Нет</label>
+            <label><input type="radio" name="hearing_difficulty" value="yes"> Да</label>
+            <label><input type="radio" name="hearing_difficulty" value="prefer_not_to_answer"> Предпочитаю не отвечать</label>
+          </div>
+          <div class="q"><strong>5. На каком устройстве Вы выполняете задание?</strong>
+            <label><input type="radio" name="device_type" value="desktop_or_laptop" required> Компьютер или ноутбук</label>
+            <label><input type="radio" name="device_type" value="tablet"> Планшет</label>
+            <label><input type="radio" name="device_type" value="smartphone"> Смартфон</label>
+            <label><input type="radio" name="device_type" value="other"> Другое устройство</label>
+          </div>
+          <div class="q"><label><input type="checkbox" name="headphones_quiet_confirmed" value="yes" required> Подтверждаю, что нахожусь в тихом месте и использую наушники.</label></div>
+        </div>`,
+        button_label: 'Продолжить',
+        data: { phase: 'participant_questionnaire' },
+        on_finish: function (d) {
+          const a = d.response || {};
+          const participantFields = {
+            age_years: String(a.age_years || '').trim(),
+            sex: a.sex || '',
+            native_russian: a.native_russian || '',
+            hearing_difficulty: a.hearing_difficulty || '',
+            device_type: a.device_type || '',
+            headphones_quiet_confirmed: a.headphones_quiet_confirmed || ''
+          };
+          // The questionnaire follows the lexical task to avoid cueing its purpose.
+          // Add profile fields to completed choice trials so the local CSV is easy to analyze.
+          jsPsych.data.get().filter({ phase: 'choice' }).addToAll(participantFields);
+        }
+      });
+
+      mainTimeline.push({
+        type: jsPsychHtmlButtonResponse,
+        stimulus: `<div class="instructions-copy"><h2>Спасибо за участие!</h2>
+          ${COLLECT_ONLINE
+            ? '<p>Задание завершено. Результаты отправляются в хранилище исследователя автоматически.</p><p>Пожалуйста, не закрывайте страницу до завершения отправки.</p>'
+            : '<p>Задание завершено. При нажатии кнопки файл с ответами будет скачан на ваше устройство.</p><p>Пожалуйста, сохраните файл и передайте его исследователю способом, который он сообщил. Если файл не появился, проверьте папку «Загрузки» браузера.</p>'}
+          </div>`,
+        choices: ['Завершить'],
+        data: { phase: 'finish' },
+        on_finish: function () {
+          if (!COLLECT_ONLINE) {
+            const choices = jsPsych.data.get().filter({ phase: 'choice' });
+            const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+            choices.localSave('csv', `whisper_list${LIST_ID}_${PARTICIPANT_ID}_${stamp}.csv`);
+          }
+        }
+      });
+
+      jsPsych.run(mainTimeline);
+      } catch (error) {
+        console.error('Experiment startup error:', error);
+        root.innerHTML = `<div class="error-note"><h2>Не удалось подготовить эксперимент</h2><p>${escapeHTML(error && error.message ? error.message : String(error))}</p><p>Это уже не ошибка открытия через file://: страница работает через веб-сервер, но возникла ошибка при настройке jsPsych. Пришли мне текст этого сообщения или скриншот, и я поправлю конкретную причину.</p></div>`;
+      }
+    }
+
+    // Catch unexpected asynchronous errors that otherwise could leave the user
+    // staring at the loading screen without an explanation.
+    window.addEventListener('unhandledrejection', function (event) {
+      if (!root.hidden && root.textContent.includes('Подготавливаем эксперимент')) {
+        root.innerHTML = `<div class="error-note"><h2>Ошибка при запуске</h2><p>${escapeHTML(event.reason && event.reason.message ? event.reason.message : String(event.reason || 'Неизвестная ошибка'))}</p><p>Пришли мне скриншот этого сообщения, если оно повторится.</p></div>`;
+      }
+    });
+    window.addEventListener('error', function (event) {
+      if (!root.hidden && root.textContent.includes('Подготавливаем эксперимент')) {
+        root.innerHTML = `<div class="error-note"><h2>Ошибка при запуске</h2><p>${escapeHTML(event.message || 'Ошибка JavaScript')}</p><p>Пришли мне скриншот этого сообщения, если оно повторится.</p></div>`;
+      }
+    });
+  })();
+  </script>
+</body>
+</html>
