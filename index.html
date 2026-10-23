@@ -65,7 +65,9 @@
     const gate = document.getElementById('consent-gate');
     const params = new URLSearchParams(window.location.search);
     const rawList = Number.parseInt(params.get('list') || '1', 10);
-    const LIST_ID = Number.isInteger(rawList) && rawList >= 1 && rawList <= 6 ? rawList : 1;
+    let LIST_ID = Number.isInteger(rawList) && rawList >= 1 && rawList <= 6
+  ? rawList
+  : 1;
     const IS_TEST_LINK = params.has('test') || params.has('uploadtest');
     const USE_TONE_FOR_TEST = params.get('test') === '1';
     const generatedId = 'S' + Date.now().toString(36).slice(-5) + Math.random().toString(36).slice(2, 8).toUpperCase();
@@ -188,6 +190,64 @@
         root.innerHTML = `<div class="error-note"><h2>Не удалось запустить эксперимент</h2><p>${escapeHTML(error.message || String(error))}</p><p>Откройте проект через веб-сервер или опубликованную ссылку, а не двойным щелчком по index.html.</p></div>`;
         return;
       }
+      if (COLLECT_ONLINE && !params.has('list') && !IS_TEST_LINK) {
+  let assignedCondition;
+
+  try {
+    if (
+      typeof jsPsychExtensionPipe === 'undefined' ||
+      typeof jsPsychExtensionPipe.getCondition !== 'function'
+    ) {
+      throw new Error(
+        'Не загрузился компонент назначения условий DataPipe.'
+      );
+    }
+
+    assignedCondition = await jsPsychExtensionPipe.getCondition(
+      DATAPIPE_EXPERIMENT_ID
+    );
+
+  } catch (error) {
+    console.error('DataPipe condition assignment failed:', error);
+
+    root.innerHTML = `
+      <div class="error-note">
+        <h2>Не удалось назначить экспериментальный лист</h2>
+        <p>${escapeHTML(
+          error && error.message ? error.message : String(error)
+        )}</p>
+        <p>
+          Эксперимент не был запущен. Пожалуйста, не обновляйте
+          страницу многократно. Сообщите исследователю об ошибке.
+        </p>
+      </div>
+    `;
+
+    return;
+  }
+
+  if (
+    !Number.isInteger(assignedCondition) ||
+    assignedCondition < 0 ||
+    assignedCondition > 5
+  ) {
+    root.innerHTML = `
+      <div class="error-note">
+        <h2>Получен некорректный номер листа</h2>
+        <p>Эксперимент не был запущен.</p>
+        <p>Пожалуйста, сообщите исследователю об ошибке.</p>
+      </div>
+    `;
+
+    return;
+  }
+
+  // DataPipe conditions are numbered 0–5.
+  // The experiment uses list IDs 1–6.
+  LIST_ID = assignedCondition + 1;
+
+  console.info('Assigned experimental list:', LIST_ID);
+}
 
       try {
       const designTrials = makeDesign(stimulusData);
@@ -214,7 +274,7 @@
         participant_id: PARTICIPANT_ID,
         list_id: LIST_ID,
         test_run: IS_TEST_LINK,
-        experiment_version: 'starter_1.1' 
+        experiment_version: 'starter_1.2' 
       });
 
       const mainTimeline = [];
